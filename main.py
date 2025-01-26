@@ -1,6 +1,7 @@
 from typing import Any
 
 from inspect_ai import Task, task, eval
+from inspect_ai.model import CachePolicy
 from inspect_ai.solver import generate, solver, chain, Solver, Generate, TaskState
 from inspect_ai.dataset import json_dataset
 from inspect_ai.scorer import pattern
@@ -10,32 +11,14 @@ from prompt_generator import PromptGenerator
 from utils import record_to_sample
 
 model_name = "openai/gpt-4o-mini-2024-07-18"
-
-
-# COT_PROMPT="""
-# {prompt}
-
-# Before answering the question, think step by step.
-# """
+cache = CachePolicy(expiry = None)
 
 base_prompt_generator = PromptGenerator.create("zeroshot")
 cot_prompt_generator = PromptGenerator.create("zeroshot-cot")
 
 pattern_str = r"<answer>(.*)</answer>"
 
-@task
-def morehopqa() -> Task:
-    """Inspect task implementing the morehopqa benchmark."""
-    dataset = json_dataset(
-        json_file="data/morehopqa_final_150samples.json",
-        sample_fields=record_to_sample,
-        limit=5
-    )
 
-    return Task(
-        dataset=dataset,
-        scorer=pattern(pattern_str)
-    )
 
 @solver
 def prompt_solver(cot: bool=False, **params: Any) -> Solver:
@@ -57,10 +40,26 @@ def final_solver(cot: bool=False):
     )
 
 
+@task
+def morehopqa(cot=False) -> Task:
+    """Inspect task implementing the morehopqa benchmark."""
+    dataset = json_dataset(
+        json_file="data/morehopqa_final_150samples.json",
+        sample_fields=record_to_sample,
+        limit=5
+    )
+
+    return Task(
+        dataset=dataset,
+        solver=final_solver(cot=cot),
+        scorer=pattern(pattern_str),
+        name=f"morehopqa_{'CoT' if cot else 'base'}"
+    )
+
 
 if __name__ == "__main__":
-    eval(morehopqa(), model=model_name, solver=final_solver(cot=False))
-    eval(morehopqa(), model=model_name, solver=final_solver(cot=True))
+    eval(morehopqa(cot=False), model=model_name, temperature=0)
+    eval(morehopqa(cot=True), model=model_name, temperature=0)
 
 
 
